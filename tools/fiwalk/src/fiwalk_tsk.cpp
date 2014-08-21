@@ -77,6 +77,9 @@ file_act(TSK_FS_FILE * fs_file, TSK_OFF_T a_off, TSK_DADDR_T addr, char *buf,
 static uint8_t
 process_tsk_file(TSK_FS_FILE * fs_file, const char *path)
 {
+    /* Use a flag to determine if a file is generically fit for plugins. */
+    bool can_run_plugin;
+
     /* Make sure that the SleuthKit structures are properly set */
     if (fs_file->name == NULL) 
         return 1;
@@ -260,10 +263,36 @@ process_tsk_file(TSK_FS_FILE * fs_file, const char *path)
     ci.write_record();
 
 
-    /* Processing for regular files: */
+    /* Processing for regular files and some virtual files: */
+    can_run_plugin = false;
     if(fs_file->name->type == TSK_FS_NAME_TYPE_REG){
-	if(ci.do_plugin && ci.total_bytes>0) plugin_process(ci.tempfile_path);
+        can_run_plugin = true;
     }
+    else if(fs_file->name->type == TSK_FS_NAME_TYPE_VIRT){
+        /* Pass some virtual files to plugins, e.g. $MBR for boot sector virus scans. */
+        if(fs_file->name->name){
+            if(strcmp(fs_file->name->name, "$MBR") == 0) {
+                can_run_plugin = true;
+            }
+        }
+    }
+
+    if(can_run_plugin && ci.do_plugin && ci.total_bytes>0) plugin_process(ci.tempfile_path);
+
+    /* Output the sector hashes to text or XML file if requested */
+//    if(fs_file->name->type == TSK_FS_NAME_TYPE_REG){
+//        if(opt_compute_sector_hashes){
+//            int count = 1;
+//            for(vector<string>::const_iterator it = ci.sectorhashes.begin();
+//              it!=ci.sectorhashes.end(); it++){
+//                if(opt_print_sector_hashes){
+//                    if(t) fprintf(t,"sectorhash: %s %d\n",(*it).c_str(),count);
+//                    if(x) x->xmlout("sectorhash",*it,"",false);
+//                }
+//                count++;
+//            }
+//        }
+//    }
 
     /* END of file processing */
     if(x) x->pop();
